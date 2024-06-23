@@ -376,6 +376,8 @@ public:
     void set_in_top_layer(bool in_top_layer) { m_in_top_layer = in_top_layer; }
     bool in_top_layer() const { return m_in_top_layer; }
 
+    bool has_parent_with_content_visibility_hidden() const;
+
 protected:
     Element(Document&, DOM::QualifiedName);
     virtual void initialize(JS::Realm&) override;
