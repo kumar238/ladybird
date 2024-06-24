@@ -777,6 +777,17 @@
       "no-close-quote"
     ]
   },
+  "content-visibility": {
+    "animation-type": "none",
+    "__comment": "FIXME: Implement animation https://drafts.csswg.org/css-contain/#content-visibility-animation",
+    "inherited": false,
+    "initial": "visible",
+    "valid-identifiers": [
+      "visible",
+      "auto",
+      "hidden"
+    ]
+  },
   "cursor": {
     "affects-layout": false,
     "animation-type": "discrete",

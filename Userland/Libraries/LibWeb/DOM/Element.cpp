@@ -17,6 +17,7 @@
 #include <LibWeb/CSS/ResolvedCSSStyleDeclaration.h>
 #include <LibWeb/CSS/SelectorEngine.h>
 #include <LibWeb/CSS/StyleComputer.h>
+#include <LibWeb/CSS/StyleProperties.h>
 #include <LibWeb/CSS/StyleValues/IdentifierStyleValue.h>
 #include <LibWeb/CSS/StyleValues/NumberStyleValue.h>
 #include <LibWeb/DOM/Attr.h>
@@ -2536,6 +2537,16 @@ CSS::StyleSheetList& Element::document_or_shadow_root_style_sheets()
         return static_cast<DOM::ShadowRoot&>(root_node).style_sheets();
 
     return document().style_sheets();
+}
+
+bool Element::has_parent_with_content_visibility_hidden() const
+{
+    for (auto const* element = parent_element(); element && element->m_computed_css_values; element = element->parent_element()) {
+        auto const& content_visibility = element->m_computed_css_values->content_visibility();
+        if (content_visibility == CSS::ContentVisibility::Hidden)
+            return true;
+    }
+    return false;
 }
 
 }

@@ -338,7 +338,7 @@ void TreeBuilder::create_layout_tree(DOM::Node& dom_node, TreeBuilder::Context& 
         VERIFY(!element.needs_style_update());
         style = element.computed_css_values();
         display = style->display();
-        if (display.is_none())
+        if (display.is_none() || element.has_parent_with_content_visibility_hidden())
             return;
         if (context.layout_svg_mask_or_clip_path) {
             if (is<SVG::SVGMaskElement>(dom_node))
@@ -414,7 +414,12 @@ void TreeBuilder::create_layout_tree(DOM::Node& dom_node, TreeBuilder::Context& 
     }
 
     if (is<HTML::HTMLSlotElement>(dom_node)) {
-        auto slottables = static_cast<HTML::HTMLSlotElement&>(dom_node).assigned_nodes_internal();
+        auto& slot_element = static_cast<HTML::HTMLSlotElement&>(dom_node);
+
+        if (slot_element.computed_css_values()->content_visibility() == CSS::ContentVisibility::Hidden)
+            return;
+
+        auto slottables = slot_element.assigned_nodes_internal();
         push_parent(verify_cast<NodeWithStyle>(*layout_node));
 
         for (auto const& slottable : slottables)
