@@ -408,22 +408,11 @@ void HTMLInputElement::did_edit_text_node(Badge<Navigable>)
 
     update_placeholder_visibility();
 
-    // NOTE: This is a bit ad-hoc, but basically implements part of "4.10.5.5 Common event behaviors"
-    //       https://html.spec.whatwg.org/multipage/input.html#common-input-element-events
-    queue_an_element_task(HTML::Task::Source::UserInteraction, [this] {
-        auto input_event = DOM::Event::create(realm(), HTML::EventNames::input);
-        input_event->set_bubbles(true);
-        input_event->set_composed(true);
-        dispatch_event(*input_event);
-    });
+    user_interaction_did_change_input_value();
 }
 
 void HTMLInputElement::did_pick_color(Optional<Color> picked_color, ColorPickerUpdateState state)
 {
-    // https://html.spec.whatwg.org/multipage/input.html#common-input-element-events
-    // For input elements without a defined input activation behavior, but to which these events apply
-    // and for which the user interface involves both interactive manipulation and an explicit commit action
-
     if (type_state() == TypeAttributeState::Color && picked_color.has_value()) {
         // then when the user changes the element's value
         m_value = value_sanitization_algorithm(picked_color.value().to_string_without_alpha());
@@ -432,15 +421,10 @@ void HTMLInputElement::did_pick_color(Optional<Color> picked_color, ColorPickerU
         update_color_well_element();
 
         // the user agent must queue an element task on the user interaction task source
-        queue_an_element_task(HTML::Task::Source::UserInteraction, [this] {
-            // given the input element to fire an event named input at the input element, with the bubbles and composed attributes initialized to true
-            auto input_event = DOM::Event::create(realm(), HTML::EventNames::input);
-            input_event->set_bubbles(true);
-            input_event->set_composed(true);
-            dispatch_event(*input_event);
-        });
+        user_interaction_did_change_input_value();
 
-        // and any time the user commits the change, the user agent must queue an element task on the user interaction task source
+        // https://html.spec.whatwg.org/multipage/input.html#common-input-element-events
+        // [...] any time the user commits the change, the user agent must queue an element task on the user interaction task source
         if (state == ColorPickerUpdateState::Closed) {
             queue_an_element_task(HTML::Task::Source::UserInteraction, [this] {
                 // given the input element
@@ -853,14 +837,26 @@ void HTMLInputElement::create_text_input_shadow_tree()
         MUST(up_button->set_inner_html("<svg style=\"width: 1em; height: 1em;\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path fill=\"currentColor\" d=\"M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z\" /></svg>"sv));
         MUST(element->append_child(up_button));
 
-        auto up_callback_function = JS::NativeFunction::create(
+        auto mouseup_callback_function = JS::NativeFunction::create(
             realm(), [this](JS::VM&) {
-                MUST(step_up());
+                commit_pending_changes();
                 return JS::js_undefined();
             },
             0, "", &realm());
-        auto up_callback = realm().heap().allocate_without_realm<WebIDL::CallbackType>(*up_callback_function, Bindings::host_defined_environment_settings_object(realm()));
-        up_button->add_event_listener_without_options(UIEvents::EventNames::click, DOM::IDLEventListener::create(realm(), up_callback));
+        auto mouseup_callback = realm().heap().allocate_without_realm<WebIDL::CallbackType>(*mouseup_callback_function, Bindings::host_defined_environment_settings_object(realm()));
+        DOM::AddEventListenerOptions mouseup_listener_options;
+        mouseup_listener_options.once = true;
+
+        auto up_callback_function = JS::NativeFunction::create(
+            realm(), [this](JS::VM&) {
+                MUST(step_up());
+                user_interaction_did_change_input_value();
+                return JS::js_undefined();
+            },
+            0, "", &realm());
+        auto step_up_callback = realm().heap().allocate_without_realm<WebIDL::CallbackType>(*up_callback_function, Bindings::host_defined_environment_settings_object(realm()));
+        up_button->add_event_listener_without_options(UIEvents::EventNames::mousedown, DOM::IDLEventListener::create(realm(), step_up_callback));
+        up_button->add_event_listener_without_options(UIEvents::EventNames::mouseup, DOM::IDLEventListener::create(realm(), mouseup_callback));
 
         // Down button
         auto down_button = MUST(DOM::create_element(document(), HTML::TagNames::button, Namespace::HTML));
@@ -874,11 +870,13 @@ void HTMLInputElement::create_text_input_shadow_tree()
         auto down_callback_function = JS::NativeFunction::create(
             realm(), [this](JS::VM&) {
                 MUST(step_down());
+                user_interaction_did_change_input_value();
                 return JS::js_undefined();
             },
             0, "", &realm());
-        auto down_callback = realm().heap().allocate_without_realm<WebIDL::CallbackType>(*down_callback_function, Bindings::host_defined_environment_settings_object(realm()));
-        down_button->add_event_listener_without_options(UIEvents::EventNames::click, DOM::IDLEventListener::create(realm(), down_callback));
+        auto step_down_callback = realm().heap().allocate_without_realm<WebIDL::CallbackType>(*down_callback_function, Bindings::host_defined_environment_settings_object(realm()));
+        down_button->add_event_listener_without_options(UIEvents::EventNames::mousedown, DOM::IDLEventListener::create(realm(), step_down_callback));
+        down_button->add_event_listener_without_options(UIEvents::EventNames::mouseup, DOM::IDLEventListener::create(realm(), mouseup_callback));
     }
 }
 
@@ -980,18 +978,8 @@ void HTMLInputElement::create_range_input_shadow_tree()
     MUST(slider_runnable_track->append_child(*m_slider_thumb));
     update_slider_thumb_element();
 
-    //  User event listeners
-    auto dispatch_input_event = [this]() {
-        queue_an_element_task(HTML::Task::Source::UserInteraction, [&] {
-            auto input_event = DOM::Event::create(realm(), HTML::EventNames::input);
-            input_event->set_bubbles(true);
-            input_event->set_composed(true);
-            dispatch_event(*input_event);
-        });
-    };
-
     auto keydown_callback_function = JS::NativeFunction::create(
-        realm(), [this, dispatch_input_event](JS::VM& vm) {
+        realm(), [this](JS::VM& vm) {
             auto key = MUST(vm.argument(0).get(vm, "key")).as_string().utf8_string();
 
             if (key == "ArrowLeft" || key == "ArrowDown")
@@ -1004,7 +992,7 @@ void HTMLInputElement::create_range_input_shadow_tree()
             if (key == "PageUp")
                 MUST(step_up(10));
 
-            dispatch_input_event();
+            user_interaction_did_change_input_value();
             return JS::js_undefined();
         },
         0, "", &realm());
@@ -1012,28 +1000,28 @@ void HTMLInputElement::create_range_input_shadow_tree()
     add_event_listener_without_options(UIEvents::EventNames::keydown, DOM::IDLEventListener::create(realm(), keydown_callback));
 
     auto wheel_callback_function = JS::NativeFunction::create(
-        realm(), [this, dispatch_input_event](JS::VM& vm) {
+        realm(), [this](JS::VM& vm) {
             auto deltaY = MUST(vm.argument(0).get(vm, "deltaY")).as_i32();
             if (deltaY > 0) {
                 MUST(step_down());
             } else {
                 MUST(step_up());
             }
-            dispatch_input_event();
+            user_interaction_did_change_input_value();
             return JS::js_undefined();
         },
         0, "", &realm());
     auto wheel_callback = realm().heap().allocate_without_realm<WebIDL::CallbackType>(*wheel_callback_function, Bindings::host_defined_environment_settings_object(realm()));
     add_event_listener_without_options(UIEvents::EventNames::wheel, DOM::IDLEventListener::create(realm(), wheel_callback));
 
-    auto update_slider_by_mouse = [this, dispatch_input_event](JS::VM& vm) {
+    auto update_slider_by_mouse = [this](JS::VM& vm) {
         auto client_x = MUST(vm.argument(0).get(vm, "clientX")).as_double();
         auto rect = get_bounding_client_rect();
         double minimum = *min();
         double maximum = *max();
         // FIXME: Snap new value to input steps
         MUST(set_value_as_number(clamp(round(((client_x - rect->left()) / rect->width()) * (maximum - minimum) + minimum), minimum, maximum)));
-        dispatch_input_event();
+        user_interaction_did_change_input_value();
     };
 
     auto mousedown_callback_function = JS::NativeFunction::create(
@@ -1068,6 +1056,23 @@ void HTMLInputElement::create_range_input_shadow_tree()
         0, "", &realm());
     auto mousedown_callback = realm().heap().allocate_without_realm<WebIDL::CallbackType>(*mousedown_callback_function, Bindings::host_defined_environment_settings_object(realm()));
     add_event_listener_without_options(UIEvents::EventNames::mousedown, DOM::IDLEventListener::create(realm(), mousedown_callback));
+}
+
+void HTMLInputElement::user_interaction_did_change_input_value()
+{
+    // https://html.spec.whatwg.org/multipage/input.html#common-input-element-events
+    // For input elements without a defined input activation behavior, but to which these events apply,
+    // and for which the user interface involves both interactive manipulation and an explicit commit action,
+    // then when the user changes the element's value, the user agent must queue an element task on the user interaction task source
+    // given the input element to fire an event named input at the input element, with the bubbles and composed attributes initialized to true,
+    // and any time the user commits the change, the user agent must queue an element task on the user interaction task source given the input
+    // element to set its user validity to true and fire an event named change at the input element, with the bubbles attribute initialized to true.
+    queue_an_element_task(HTML::Task::Source::UserInteraction, [this] {
+        auto input_event = DOM::Event::create(realm(), HTML::EventNames::input);
+        input_event->set_bubbles(true);
+        input_event->set_composed(true);
+        dispatch_event(*input_event);
+    });
 }
 
 void HTMLInputElement::update_slider_thumb_element()
