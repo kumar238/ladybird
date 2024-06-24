@@ -37,9 +37,9 @@ enum class CommandResult {
     SkipStackingContext,
 };
 
-class CommandExecutor {
+class DisplayListPlayer {
 public:
-    virtual ~CommandExecutor() = default;
+    virtual ~DisplayListPlayer() = default;
 
     virtual CommandResult draw_glyph_run(DrawGlyphRun const&) = 0;
     virtual CommandResult fill_rect(FillRect const&) = 0;
@@ -77,13 +77,13 @@ public:
     virtual void update_immutable_bitmap_texture_cache(HashMap<u32, Gfx::ImmutableBitmap const*>&) = 0;
 };
 
-class CommandList {
+class DisplayList {
 public:
     void append(Command&& command, Optional<i32> scroll_frame_id);
 
     void apply_scroll_offsets(Vector<Gfx::IntPoint> const& offsets_by_frame_id);
     void mark_unnecessary_commands();
-    void execute(CommandExecutor&);
+    void execute(DisplayListPlayer&);
 
     size_t corner_clip_max_depth() const { return m_corner_clip_max_depth; }
     void set_corner_clip_max_depth(size_t depth) { m_corner_clip_max_depth = depth; }

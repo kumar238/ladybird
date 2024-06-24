@@ -8,11 +8,11 @@
 
 #include <AK/MaybeOwned.h>
 #include <LibGfx/ScalingMode.h>
-#include <LibWeb/Painting/RecordingPainter.h>
+#include <LibWeb/Painting/DisplayListRecorder.h>
 
 namespace Web::Painting {
 
-class CommandExecutorCPU : public CommandExecutor {
+class DisplayListPlayerCPU : public DisplayListPlayer {
 public:
     CommandResult draw_glyph_run(DrawGlyphRun const&) override;
     CommandResult fill_rect(FillRect const&) override;
@@ -53,8 +53,8 @@ public:
     bool needs_update_immutable_bitmap_texture_cache() const override { return false; }
     void update_immutable_bitmap_texture_cache(HashMap<u32, Gfx::ImmutableBitmap const*>&) override {};
 
-    CommandExecutorCPU(Gfx::Bitmap& bitmap);
-    ~CommandExecutorCPU();
+    DisplayListPlayerCPU(Gfx::Bitmap& bitmap);
+    ~DisplayListPlayerCPU();
 
 private:
     Gfx::Bitmap& m_target_bitmap;

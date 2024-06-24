@@ -28,16 +28,16 @@
 #include <LibWeb/Painting/BorderRadiiData.h>
 #include <LibWeb/Painting/BorderRadiusCornerClipper.h>
 #include <LibWeb/Painting/Command.h>
-#include <LibWeb/Painting/CommandList.h>
+#include <LibWeb/Painting/DisplayList.h>
 #include <LibWeb/Painting/GradientData.h>
 #include <LibWeb/Painting/PaintBoxShadowParams.h>
 #include <LibWeb/Painting/PaintStyle.h>
 
 namespace Web::Painting {
 
-class RecordingPainter {
-    AK_MAKE_NONCOPYABLE(RecordingPainter);
-    AK_MAKE_NONMOVABLE(RecordingPainter);
+class DisplayListRecorder {
+    AK_MAKE_NONCOPYABLE(DisplayListRecorder);
+    AK_MAKE_NONMOVABLE(DisplayListRecorder);
 
 public:
     void fill_rect(Gfx::IntRect const& rect, Color color, Vector<Gfx::Path> const& clip_paths = {});
@@ -135,10 +135,10 @@ public:
 
     void draw_triangle_wave(Gfx::IntPoint a_p1, Gfx::IntPoint a_p2, Color color, int amplitude, int thickness);
 
-    RecordingPainter(CommandList& commands_list);
-    ~RecordingPainter();
+    DisplayListRecorder(DisplayList&);
+    ~DisplayListRecorder();
 
-    CommandList& commands_list() { return m_command_list; }
+    DisplayList& display_list() { return m_command_list; }
 
     void append(Command&& command);
 
@@ -158,24 +158,24 @@ private:
     Vector<CornerClipState> m_corner_clip_state_stack;
 
     Vector<State> m_state_stack;
-    CommandList& m_command_list;
+    DisplayList& m_command_list;
 };
 
-class RecordingPainterStateSaver {
+class DisplayListRecorderStateSaver {
 public:
-    explicit RecordingPainterStateSaver(RecordingPainter& painter)
+    explicit DisplayListRecorderStateSaver(DisplayListRecorder& painter)
         : m_painter(painter)
     {
         m_painter.save();
     }
 
-    ~RecordingPainterStateSaver()
+    ~DisplayListRecorderStateSaver()
     {
         m_painter.restore();
     }
 
 private:
-    RecordingPainter& m_painter;
+    DisplayListRecorder& m_painter;
 };
 
 }
