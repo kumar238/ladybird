@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/Format.h>
 #include <AK/StringView.h>
 
 namespace Media {
@@ -81,6 +82,8 @@ enum class VideoFullRangeFlag : u8 {
 // https://en.wikipedia.org/wiki/Coding-independent_code_points
 struct CodingIndependentCodePoints {
 public:
+    constexpr CodingIndependentCodePoints() = default;
+
     constexpr CodingIndependentCodePoints(ColorPrimaries color_primaries, TransferCharacteristics transfer_characteristics, MatrixCoefficients matrix_coefficients, VideoFullRangeFlag video_full_range_flag)
         : m_color_primaries(color_primaries)
         , m_transfer_characteristics(transfer_characteristics)
@@ -123,10 +126,10 @@ public:
     }
 
 private:
-    ColorPrimaries m_color_primaries;
-    TransferCharacteristics m_transfer_characteristics;
-    MatrixCoefficients m_matrix_coefficients;
-    VideoFullRangeFlag m_video_full_range_flag;
+    ColorPrimaries m_color_primaries = ColorPrimaries::BT709;
+    TransferCharacteristics m_transfer_characteristics = TransferCharacteristics::BT709;
+    MatrixCoefficients m_matrix_coefficients = MatrixCoefficients::BT709;
+    VideoFullRangeFlag m_video_full_range_flag = VideoFullRangeFlag::Full;
 };
 
 constexpr StringView color_primaries_to_string(ColorPrimaries color_primaries)
@@ -252,5 +255,49 @@ constexpr StringView video_full_range_flag_to_string(VideoFullRangeFlag video_fu
     }
     return "Unknown"sv;
 }
+
+}
+
+namespace AK {
+
+template<>
+struct Formatter<Media::ColorPrimaries> final : Formatter<StringView> {
+    ErrorOr<void> format(FormatBuilder& builder, Media::ColorPrimaries color_primaries)
+    {
+        return Formatter<StringView>::format(builder, Media::color_primaries_to_string(color_primaries));
+    }
+};
+
+template<>
+struct Formatter<Media::TransferCharacteristics> final : Formatter<StringView> {
+    ErrorOr<void> format(FormatBuilder& builder, Media::TransferCharacteristics transfer_characteristics)
+    {
+        return Formatter<StringView>::format(builder, Media::transfer_characteristics_to_string(transfer_characteristics));
+    }
+};
+
+template<>
+struct Formatter<Media::MatrixCoefficients> final : Formatter<StringView> {
+    ErrorOr<void> format(FormatBuilder& builder, Media::MatrixCoefficients matrix_coefficients)
+    {
+        return Formatter<StringView>::format(builder, Media::matrix_coefficients_to_string(matrix_coefficients));
+    }
+};
+
+template<>
+struct Formatter<Media::VideoFullRangeFlag> final : Formatter<StringView> {
+    ErrorOr<void> format(FormatBuilder& builder, Media::VideoFullRangeFlag range)
+    {
+        return Formatter<StringView>::format(builder, Media::video_full_range_flag_to_string(range));
+    }
+};
+
+template<>
+struct Formatter<Media::CodingIndependentCodePoints> final : Formatter<FormatString> {
+    ErrorOr<void> format(FormatBuilder& builder, Media::CodingIndependentCodePoints cicp)
+    {
+        return Formatter<FormatString>::format(builder, "CICP {{ CP = {}, TC = {}, MC = {}, Range = {} }}"sv, cicp.color_primaries(), cicp.transfer_characteristics(), cicp.matrix_coefficients(), cicp.video_full_range_flag());
+    }
+};
 
 }

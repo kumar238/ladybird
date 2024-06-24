@@ -98,6 +98,17 @@ CodecID MatroskaDemuxer::get_codec_id_for_string(FlyString const& codec_id)
     return CodecID::Unknown;
 }
 
+DecoderErrorOr<CodecID> MatroskaDemuxer::get_codec_id_for_track(Track track)
+{
+    auto codec_id = TRY(m_reader.track_for_track_number(track.identifier()))->codec_id();
+    return get_codec_id_for_string(codec_id);
+}
+
+DecoderErrorOr<ReadonlyBytes> MatroskaDemuxer::get_codec_initialization_data_for_track(Track track)
+{
+    return TRY(m_reader.track_for_track_number(track.identifier()))->codec_private_data();
+}
+
 DecoderErrorOr<Optional<Duration>> MatroskaDemuxer::seek_to_most_recent_keyframe(Track track, Duration timestamp, Optional<Duration> earliest_available_sample)
 {
     // Removing the track status will cause us to start from the beginning.
@@ -136,20 +147,14 @@ DecoderErrorOr<Sample> MatroskaDemuxer::get_next_sample_for_track(Track track)
         status.block = TRY(status.iterator.next_block());
         status.frame_index = 0;
     }
-    auto cicp = TRY(m_reader.track_for_track_number(track.identifier())).video_track()->color_format.to_cicp();
-    return Sample(status.block->timestamp(), status.block->frame(status.frame_index++), Video::VideoSampleData(cicp));
+    auto cicp = TRY(m_reader.track_for_track_number(track.identifier()))->video_track()->color_format.to_cicp();
+    return Sample(status.block->timestamp(), status.block->frame(status.frame_index++), VideoSampleData(cicp));
 }
 
 DecoderErrorOr<Duration> MatroskaDemuxer::duration()
 {
     auto duration = TRY(m_reader.segment_information()).duration();
     return duration.value_or(Duration::zero());
-}
-
-DecoderErrorOr<CodecID> MatroskaDemuxer::get_codec_id_for_track(Track track)
-{
-    auto codec_id = TRY(m_reader.track_for_track_number(track.identifier())).codec_id();
-    return get_codec_id_for_string(codec_id);
 }
 
 }
